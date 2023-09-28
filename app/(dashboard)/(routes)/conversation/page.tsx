@@ -4,6 +4,7 @@ import * as z from 'zod'
 import { Divide, MessageSquare } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import axios from 'axios'
 
 import { Heading } from '@/components/heading'
 
@@ -11,8 +12,19 @@ import { formSchema } from './constants'
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { ChatCompletionRequestMessage } from 'openai'
+import Empty from '@/components/empty'
+import Loader from '@/components/loader'
+import { cn } from '@/lib/utils'
+import UserAvatar from '@/components/user-avatar'
+import BotAvatar from '@/components/bot-avatar'
 
 const ConversationPage = () => {
+    const router = useRouter()
+    const [messages, setMessages] = useState<ChatCompletionRequestMessage[]>([])
+
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -24,6 +36,28 @@ const ConversationPage = () => {
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         console.log(values)
+        try {
+            const userMessage: ChatCompletionRequestMessage = {
+                role: 'user',
+                content: values.prompt
+            }
+            const newMessages = [...messages, userMessage]
+
+            const response = await axios.post('/api/conversation', {
+                messages: newMessages
+            })
+            setMessages((current) => [...current, userMessage, response.data])
+
+            form.reset()
+        } catch (error: any) {
+            console.log(error)
+            if (error?.response?.status === 403) {
+                console.log(error.response.data)
+            } else {
+            }
+        } finally {
+            router.refresh()
+        }
     }
     return (
         <div>
@@ -40,12 +74,12 @@ const ConversationPage = () => {
                         <form
                             onSubmit={form.handleSubmit(onSubmit)}
                             className="
-                                rounded-lg
-                                border
-                                w-full
-                                p-4
-                                px-3
-                                md:px-6
+                                rounded-lg 
+                                border 
+                                w-full 
+                                p-4 
+                                px-3 
+                                md:px-6 
                                 focus-within:shadow-sm
                                 grid
                                 grid-cols-12
@@ -54,15 +88,13 @@ const ConversationPage = () => {
                         >
                             <FormField
                                 name="prompt"
-                                render={(field) => (
+                                render={({ field }) => (
                                     <FormItem className="col-span-12 lg:col-span-10">
                                         <FormControl className="m-0 p-0">
                                             <Input
-                                                className="border-0 outline-none 
-                                                focus-visible:ring-0
-                                                focus-visible:ring-transparent"
+                                                className="border-0 outline-none focus-visible:ring-0 focus-visible:ring-transparent"
                                                 disabled={isLoading}
-                                                placeholder="How to I calculate the radius of a circle?"
+                                                placeholder="How do I calculate the radius of a circle?"
                                                 {...field}
                                             />
                                         </FormControl>
@@ -71,19 +103,52 @@ const ConversationPage = () => {
                             />
                             <Button
                                 className="col-span-12 lg:col-span-2 w-full"
+                                type="submit"
                                 disabled={isLoading}
+                                size="icon"
                             >
                                 Generate
                             </Button>
                         </form>
                     </Form>
                 </div>
-                <div className="space-y-4 mt-4">Message Content</div>
+                <div className="space-y-4 mt-4">
+                    {isLoading && (
+                        <div
+                            className="p-8 rounded-lg w-full flex
+                        items-center justify-center
+                    "
+                        >
+                            <Loader />
+                        </div>
+                    )}
+                    {messages.length === 0 && !isLoading && (
+                        <Empty label="No Conversation started." />
+                    )}
+                    <div className="flex flex-col-reverse gap-y-4">
+                        {messages.map((message) => (
+                            <div
+                                key={message.content}
+                                className={cn(
+                                    'p-8 w-full flex items-start gap-x-8 rounded-lg',
+                                    message.role === 'user'
+                                        ? 'bg-white border border-black/10'
+                                        : 'bg-muted'
+                                )}
+                            >
+                                {message.role === 'user' ? (
+                                    <UserAvatar />
+                                ) : (
+                                    <BotAvatar />
+                                )}
+                                <p className="text-sm"> {message.content}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
     )
 }
 
 export default ConversationPage
-
-// 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
